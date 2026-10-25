@@ -2,6 +2,9 @@
   "name": "mobile",
   "version": "1.0.0",
   "main": "expo-router/entry",
+  "workspaces": [
+    "packages/*"
+  ],
   "dependencies": {
     "expo": "~57.0.31",
     "expo-constants": "~57.0.22",
@@ -15,20 +18,24 @@
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "^0.21.2",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "private": true
 }

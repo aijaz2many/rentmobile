@@ -1,22 +1,28 @@
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
+import {
+  getMaintenanceCategories,
+  getOutstandingBalance,
+  getPaymentHistory,
+  getTenantLeases,
+  getTenantProfile,
+  getTenantRentCharges,
+  submitMaintenanceRequest,
+  updateMaintenanceRequest,
+  withdrawMaintenanceRequest,
+  type MaintenanceCategory,
+  type TenantProfile,
+} from '../modules/tenant';
 import { apiRequest } from '../services/api';
-import { Card, colors, ErrorMessage, Loading, Page, styles } from './AppUi';
+import { formatDate, isDateField } from '../lib/date';
+import { ActionCard, Card, colors, ErrorMessage, Loading, Page, styles } from './AppUi';
 import { RecordCard } from './ModuleScreen';
 
 type DataRecord = Record<string, unknown>;
-type TenantProfile = DataRecord & {
-  currentApartment?: {
-    id: string;
-    apartmentNumber: string;
-    buildingName: string;
-    monthlyRent: number;
-  } | null;
-};
 
 type ScreenKind = 'dashboard' | 'home' | 'rent' | 'maintenance';
-type MaintenanceCategory = { id: string; name: string };
 
 function recordsFrom(payload: unknown, key?: string): DataRecord[] {
   if (Array.isArray(payload)) return payload.filter((item): item is DataRecord => typeof item === 'object' && item !== null);
@@ -35,38 +41,38 @@ type TenantScreenData = {
 
 async function fetchTenantScreen(kind: ScreenKind, tenantId: string): Promise<TenantScreenData> {
   if (kind === 'maintenance') {
-    const [tenant, maintenance, lookups] = await Promise.all([
-      apiRequest<TenantProfile>(`/tenants/${tenantId}`),
+    const [tenant, maintenance, categories] = await Promise.all([
+      getTenantProfile(tenantId),
       apiRequest<unknown>('/maintenance'),
-      apiRequest<{ categories: MaintenanceCategory[] }>('/maintenance/meta/lookups'),
+      getMaintenanceCategories(),
     ]);
-    return { tenant, records: recordsFrom(maintenance, 'requests'), categories: lookups.categories };
+    return { tenant, records: recordsFrom(maintenance, 'requests'), categories };
   }
 
-  const tenant = await apiRequest<TenantProfile>(`/tenants/${tenantId}`);
+  const tenant = await getTenantProfile(tenantId);
   if (kind === 'home') {
-    const leases = await apiRequest<unknown>(`/leases?tenantId=${encodeURIComponent(tenantId)}`);
+    const leases = await getTenantLeases(tenantId);
     return { tenant, records: recordsFrom(leases) };
   }
   if (kind === 'rent') {
     const [charges, paymentResult, outstanding] = await Promise.all([
-      apiRequest<unknown>('/rent/charges'),
-      apiRequest<unknown>(`/payments?tenantId=${encodeURIComponent(tenantId)}`),
-      apiRequest<DataRecord>(`/payments/outstanding?tenantId=${encodeURIComponent(tenantId)}`),
+      getTenantRentCharges(tenantId),
+      getPaymentHistory(tenantId),
+      getOutstandingBalance(tenantId),
     ]);
     return {
       tenant,
       records: recordsFrom(charges),
-      payments: recordsFrom(paymentResult, 'payments'),
+      payments: recordsFrom(paymentResult),
       outstanding,
     };
   }
 
   const [outstanding, paymentResult] = await Promise.all([
-    apiRequest<DataRecord>(`/payments/outstanding?tenantId=${encodeURIComponent(tenantId)}`),
-    apiRequest<unknown>(`/payments?tenantId=${encodeURIComponent(tenantId)}`),
+    getOutstandingBalance(tenantId),
+    getPaymentHistory(tenantId),
   ]);
-  return { tenant, outstanding, payments: recordsFrom(paymentResult, 'payments') };
+  return { tenant, outstanding, payments: recordsFrom(paymentResult) };
 }
 
 export default function TenantScreen({ kind }: { kind: ScreenKind }) {
@@ -81,6 +87,7 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
   const [priorityCode, setPriorityCode] = useState('MEDIUM');
   const [requestTitle, setRequestTitle] = useState('');
   const [requestDescription, setRequestDescription] = useState('');
+  const [editingMaintenanceId, setEditingMaintenanceId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(Boolean(tenantId));
   const [error, setError] = useState<string | null>(null);
@@ -131,34 +138,79 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
     }
   };
 
-  async function submitMaintenanceRequest() {
+  async function requestMaintenance() {
     const apartmentId = tenant?.currentApartment?.id;
-    if (!tenantId || !apartmentId || !selectedCategoryId || requestTitle.trim().length < 3 || requestDescription.trim().length < 5) {
+    if ((!editingMaintenanceId && (!tenantId || !apartmentId)) || !selectedCategoryId || requestTitle.trim().length < 3 || requestDescription.trim().length < 5) {
       Alert.alert('Complete the request', 'Choose a category and enter a title and description for your active apartment.');
       return;
     }
     setSubmitting(true);
     try {
-      await apiRequest('/maintenance', {
-        method: 'POST',
-        body: JSON.stringify({
-          apartmentId,
-          tenantId,
-          categoryId: selectedCategoryId,
-          priorityCode,
-          title: requestTitle.trim(),
-          description: requestDescription.trim(),
-        }),
-      });
+      const request = {
+        categoryId: selectedCategoryId,
+        priorityCode,
+        title: requestTitle.trim(),
+        description: requestDescription.trim(),
+      };
+      if (editingMaintenanceId) {
+        await updateMaintenanceRequest(editingMaintenanceId, request);
+      } else {
+        await submitMaintenanceRequest({ ...request, apartmentId: apartmentId!, tenantId: tenantId! });
+      }
       setRequestTitle('');
       setRequestDescription('');
+      setEditingMaintenanceId(null);
       await refresh();
-      Alert.alert('Request submitted', 'Your maintenance request has been sent to the property manager.');
+      Alert.alert(
+        editingMaintenanceId ? 'Request updated' : 'Request submitted',
+        editingMaintenanceId ? 'Your changes have been saved.' : 'Your maintenance request has been sent to the property manager.',
+      );
     } catch (submitError) {
       Alert.alert('Unable to submit request', submitError instanceof Error ? submitError.message : 'Please try again.');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function editMaintenanceRequest(record: DataRecord) {
+    if (typeof record.id !== 'string') return;
+    setEditingMaintenanceId(record.id);
+    setSelectedCategoryId(typeof record.categoryId === 'string' ? record.categoryId : '');
+    setPriorityCode(typeof record.priority === 'string' ? record.priority : 'MEDIUM');
+    setRequestTitle(typeof record.title === 'string' ? record.title : '');
+    setRequestDescription(typeof record.description === 'string' ? record.description : '');
+  }
+
+  function confirmWithdrawMaintenanceRequest(record: DataRecord) {
+    if (typeof record.id !== 'string') return;
+    Alert.alert(
+      'Withdraw maintenance request?',
+      'This request will be marked as withdrawn. Its history will remain available.',
+      [
+        { text: 'Keep request', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: () => {
+            setSubmitting(true);
+            withdrawMaintenanceRequest(record.id as string)
+              .then(async () => {
+                if (editingMaintenanceId === record.id) {
+                  setEditingMaintenanceId(null);
+                  setRequestTitle('');
+                  setRequestDescription('');
+                }
+                await refresh();
+              })
+              .then(() => Alert.alert('Request withdrawn', 'The maintenance request has been withdrawn.'))
+              .catch((withdrawError: unknown) => {
+                Alert.alert('Unable to withdraw request', withdrawError instanceof Error ? withdrawError.message : 'Please try again.');
+              })
+              .finally(() => setSubmitting(false));
+          },
+        },
+      ],
+    );
   }
 
   const title = kind === 'dashboard'
@@ -172,10 +224,25 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
     ? error
     : 'This account is not linked to a tenant profile. Contact your property administrator.';
 
+  const mvpActions = [
+    { title: 'My apartment', description: 'Review your lease, unit, and resident details.', onPress: () => router.push('/(tenant)/home') },
+    { title: 'Rent overview', description: 'Check rent charges and outstanding balance.', onPress: () => router.push('/(tenant)/rent') },
+    { title: 'Pay rent', description: 'Review payment history and complete rent payment.', onPress: () => router.push('/(tenant)/rent') },
+    { title: 'Maintenance', description: 'Report issues and track the request status.', onPress: () => router.push('/(tenant)/maintenance') },
+  ];
+
   return (
     <Page title={title} subtitle="Your rental account." refreshing={loading} onRefresh={refresh}>
       {loading ? <Loading /> : null}
       {displayedError ? <ErrorMessage message={displayedError} onRetry={refresh} /> : null}
+      {kind === 'dashboard' ? (
+        <>
+          <Text style={styles.sectionTitle}>MVP release flow</Text>
+          {mvpActions.map((action) => (
+            <ActionCard key={action.title} title={action.title} description={action.description} onPress={action.onPress} />
+          ))}
+        </>
+      ) : null}
       {tenant && kind !== 'maintenance' ? (
         <Card>
           <Text style={styles.actionTitle}>Hello, {String(tenant.fullName || tenant.firstName || 'Tenant')}</Text>
@@ -193,7 +260,9 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
         <Card>
           <Text style={styles.actionTitle}>Rent balance</Text>
           {Object.entries(outstanding).map(([key, value]) => (
-            <Text key={key} style={styles.subtitle}>{`${key.replace(/([A-Z])/g, ' $1')}: ${String(value)}`}</Text>
+            <Text key={key} style={styles.subtitle}>
+              {`${key.replace(/([A-Z])/g, ' $1')}: ${isDateField(key) ? formatDate(value) : String(value)}`}
+            </Text>
           ))}
         </Card>
       ) : null}
@@ -201,7 +270,7 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
         <>
           {kind === 'maintenance' ? (
             <Card>
-              <Text style={styles.actionTitle}>Report a maintenance issue</Text>
+              <Text style={styles.actionTitle}>{editingMaintenanceId ? 'Edit maintenance request' : 'Report a maintenance issue'}</Text>
               {tenant?.currentApartment ? (
                 <Text style={styles.subtitle}>
                   {tenant.currentApartment.buildingName} · Unit {tenant.currentApartment.apartmentNumber}
@@ -261,9 +330,24 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
                 style={[styles.input, { minHeight: 92, textAlignVertical: 'top' }]}
                 value={requestDescription}
               />
-              <Pressable disabled={submitting || !tenant?.currentApartment} onPress={() => void submitMaintenanceRequest()} style={styles.button}>
-                <Text style={styles.buttonLabel}>{submitting ? 'Submitting...' : 'Submit request'}</Text>
+              <Pressable disabled={submitting || (!editingMaintenanceId && !tenant?.currentApartment)} onPress={() => void requestMaintenance()} style={styles.button}>
+                <Text style={styles.buttonLabel}>
+                  {submitting ? 'Saving...' : editingMaintenanceId ? 'Save changes' : 'Submit request'}
+                </Text>
               </Pressable>
+              {editingMaintenanceId ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setEditingMaintenanceId(null);
+                    setRequestTitle('');
+                    setRequestDescription('');
+                  }}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.buttonLabel}>Cancel editing</Text>
+                </Pressable>
+              ) : null}
             </Card>
           ) : null}
           <Text style={styles.sectionTitle}>
@@ -271,7 +355,29 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
           </Text>
           {!loading && !error && rows.length === 0 ? <Card><Text style={styles.subtitle}>No records found.</Text></Card> : null}
           {rows.map((record, index) => (
-            <RecordCard key={typeof record.id === 'string' ? record.id : `${kind}-${index}`} record={record} />
+            <View key={typeof record.id === 'string' ? record.id : `${kind}-${index}`} style={{ gap: 8 }}>
+              <RecordCard record={record} kind={kind === 'maintenance' ? kind : undefined} />
+              {kind === 'maintenance' && record.status === 'SUBMITTED' ? (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={submitting}
+                    onPress={() => editMaintenanceRequest(record)}
+                    style={[styles.secondaryButton, { flex: 1 }]}
+                  >
+                    <Text style={styles.buttonLabel}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={submitting}
+                    onPress={() => confirmWithdrawMaintenanceRequest(record)}
+                    style={[styles.secondaryButton, { borderColor: colors.danger, flex: 1 }]}
+                  >
+                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: '700' }}>Withdraw</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           ))}
         </>
       ) : null}

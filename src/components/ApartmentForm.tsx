@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { apiRequest } from '../services/api';
 
 export interface ApartmentFormData {
@@ -51,6 +51,7 @@ export default function ApartmentForm({ initialData = {}, onSuccess, onCancel }:
   const [typeOptions, setTypeOptions] = useState<{ id: string; label: string; code?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [discardModalVisible, setDiscardModalVisible] = useState(false);
 
   // Check if user changed any field
   const isDirty =
@@ -65,19 +66,15 @@ export default function ApartmentForm({ initialData = {}, onSuccess, onCancel }:
 
   const handleCancel = () => {
     if (isDirty) {
-      if (typeof window !== 'undefined' && window.confirm) {
-        if (window.confirm('Discard unsaved changes?')) {
-          onCancel?.();
-        }
-      } else {
-        Alert.alert('Discard Changes?', 'You have unsaved edits. Are you sure you want to cancel?', [
-          { text: 'Keep Editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => onCancel?.() },
-        ]);
-      }
+      setDiscardModalVisible(true);
     } else {
       onCancel?.();
     }
+  };
+
+  const discardChanges = () => {
+    setDiscardModalVisible(false);
+    onCancel?.();
   };
 
   useEffect(() => {
@@ -180,15 +177,15 @@ export default function ApartmentForm({ initialData = {}, onSuccess, onCancel }:
   useEffect(() => {
     let isActive = true;
 
-    if (!form.buildingId) {
-      setFloors([]);
-      setForm((prev) => ({ ...prev, floorId: '' }));
-      return () => {
-        isActive = false;
-      };
-    }
-
     const loadFloors = async () => {
+      if (!form.buildingId) {
+        if (isActive) {
+          setFloors([]);
+          setForm((prev) => ({ ...prev, floorId: '' }));
+        }
+        return;
+      }
+
       let mapped: { id: string; name: string }[] = [];
       try {
         const response = await apiRequest<any[]>(`/properties/buildings/${form.buildingId}/floors`);
@@ -493,6 +490,37 @@ export default function ApartmentForm({ initialData = {}, onSuccess, onCancel }:
           )}
         </TouchableOpacity>
       </View>
+      <Modal
+        visible={discardModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDiscardModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} accessibilityRole="alert">
+            <Text style={styles.modalTitle}>Discard unsaved changes?</Text>
+            <Text style={styles.modalMessage}>
+              Your apartment details have not been saved. Do you want to discard them and close this form?
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.keepEditingButton}
+                onPress={() => setDiscardModalVisible(false)}
+              >
+                <Text style={styles.keepEditingText}>Keep editing</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.discardButton}
+                onPress={discardChanges}
+              >
+                <Text style={styles.discardButtonText}>Discard changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -596,5 +624,65 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     marginVertical: 6,
+  },
+  modalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(2, 6, 23, 0.76)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#151f32',
+    borderColor: '#334155',
+    borderRadius: 18,
+    borderWidth: 1,
+    maxWidth: 420,
+    padding: 22,
+    width: '100%',
+  },
+  modalTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    color: '#aab7ca',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+    marginTop: 22,
+  },
+  keepEditingButton: {
+    alignItems: 'center',
+    borderColor: '#475569',
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 14,
+  },
+  keepEditingText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  discardButton: {
+    alignItems: 'center',
+    backgroundColor: '#b91c1c',
+    borderRadius: 10,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 14,
+  },
+  discardButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import type { SharedUser, UserRole } from '@rentmobile/shared';
 
 const defaultApiUrl = Platform.OS === 'android'
   ? 'http://10.0.2.2:5000/api'
@@ -6,7 +7,9 @@ const defaultApiUrl = Platform.OS === 'android'
 
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
 
-export interface User {
+export type { UserRole };
+
+export interface User extends SharedUser {
   id: string;
   organizationId: string;
   organizationName?: string;
@@ -14,7 +17,7 @@ export interface User {
   lastName?: string;
   email: string | null;
   phone: string | null;
-  roles: string[];
+  roles: UserRole[];
   tenantId?: string;
   status?: string;
   profileImageUrl?: string | null;

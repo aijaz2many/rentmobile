@@ -1,13 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
-import { ApiError, apiRequest, setToken } from '../services/api';
+import { getCurrentUser, loginWithEmail, registerAccount } from '../modules/auth';
+import { ApiError, setToken } from '../services/api';
 import { User } from '../types';
-
-type AuthResponse = {
-  token: string;
-  user: User;
-};
 
 type AuthContextValue = {
   user: User | null;
@@ -53,8 +49,8 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
           const token = await SecureStore.getItemAsync(TOKEN_KEY);
           if (token) {
             setToken(token);
-            const profile = await apiRequest<User>('/auth/me');
-            if (active) setUser(profile);
+            const profile = await getCurrentUser();
+            if (active) setUser(profile as User);
           }
         }
       } catch (restoreError) {
@@ -80,21 +76,12 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     };
   }, []);
 
-  const authenticate = useCallback(async (path: string, body: object) => {
+  const login = useCallback(async (emailOrPhone: string, password: string) => {
     setError(null);
-    const response = await apiRequest<AuthResponse>(path, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    const response = await loginWithEmail(emailOrPhone, password);
     await saveToken(response.token);
-    setUser(response.user);
+    setUser(response.user as User);
   }, []);
-
-  const login = useCallback(
-    async (emailOrPhone: string, password: string) =>
-      authenticate('/auth/login', { emailOrPhone, password }),
-    [authenticate]
-  );
 
   const register = useCallback(
     async (input: {
@@ -104,8 +91,13 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
       phone?: string;
       password: string;
       organizationName: string;
-    }) => authenticate('/auth/register', input),
-    [authenticate]
+    }) => {
+      setError(null);
+      const response = await registerAccount(input);
+      await saveToken(response.token);
+      setUser(response.user as User);
+    },
+    []
   );
 
   const logout = useCallback(async () => {

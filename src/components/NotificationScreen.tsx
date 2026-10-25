@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, Text } from 'react-native';
 import { apiRequest } from '../services/api';
 import { Card, colors, ErrorMessage, Loading, Page, styles } from './AppUi';
+import { formatDate } from '../lib/date';
 
 type Notification = {
   id: string;
@@ -84,7 +85,7 @@ export default function NotificationScreen() {
             <Text style={styles.actionTitle}>{item.title || item.type || 'Notification'}</Text>
             {item.message ? <Text style={styles.subtitle}>{item.message}</Text> : null}
             <Text style={{ color: item.is_read ? colors.muted : colors.accent, fontSize: 12 }}>
-              {item.is_read ? 'Read' : 'Unread'}{item.created_at ? `  ·  ${new Date(item.created_at).toLocaleDateString()}` : ''}
+              {item.is_read ? 'Read' : 'Unread'}{item.created_at ? `  ·  ${formatDate(item.created_at)}` : ''}
             </Text>
           </Card>
         </Pressable>

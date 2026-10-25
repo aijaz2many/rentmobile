@@ -1,8 +1,9 @@
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { DashboardMetrics } from '../../types';
-import { apiRequest } from '../../services/api';
-import { Card, ErrorMessage, Loading, Page, styles } from '../../components/AppUi';
+import { getDashboardMetrics } from '../../modules/dashboard';
+import { ActionCard, Card, ErrorMessage, Loading, Page, styles } from '../../components/AppUi';
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
@@ -20,10 +21,10 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     let active = true;
-    apiRequest<DashboardMetrics>('/dashboard/metrics')
+    getDashboardMetrics()
       .then((result) => {
         if (active) {
-          setMetrics(result);
+          setMetrics(result as unknown as DashboardMetrics);
           setError(null);
         }
       })
@@ -40,13 +41,24 @@ export default function OwnerDashboard() {
     setLoading(true);
     setError(null);
     try {
-      setMetrics(await apiRequest<DashboardMetrics>('/dashboard/metrics'));
+      setMetrics((await getDashboardMetrics()) as unknown as DashboardMetrics);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load the dashboard.');
     } finally {
       setLoading(false);
     }
   };
+
+  const mvpActions = [
+    ['properties', 'Create property', 'Set up a property and start your portfolio.'],
+    ['buildings', 'Create building', 'Add building details for each property.'],
+    ['apartments', 'Bulk create apartments', 'Generate units for a building in one step.'],
+    ['tenants', 'Add tenant', 'Create a new resident profile and lease.'],
+    ['leases', 'Create lease', 'Link a tenant to a unit and set rent terms.'],
+    ['rent', 'Generate rent', 'Create the monthly rent run for all active leases.'],
+    ['payments', 'Record payment', 'Log payment and receipts against outstanding charges.'],
+    ['receipts', 'Generate receipt', 'Review payment details and issue a receipt.'],
+  ] as const;
 
   return (
     <Page title="Dashboard" subtitle="Your portfolio at a glance." refreshing={loading} onRefresh={() => void refresh()}>
@@ -60,6 +72,10 @@ export default function OwnerDashboard() {
             <Metric label="Occupied" value={metrics.summary.occupiedApartments} />
             <Metric label="Tenants" value={metrics.summary.totalTenants} />
           </View>
+          <Text style={styles.sectionTitle}>MVP release checklist</Text>
+          {mvpActions.map(([kind, title, description]) => (
+            <ActionCard key={kind} title={title} description={description} onPress={() => router.push(`/(owner)/records/${kind}`)} />
+          ))}
           <Text style={styles.sectionTitle}>This month</Text>
           <Card>
             <View style={styles.row}><Text style={styles.label}>Expected rent</Text><Text style={styles.value}>{metrics.financials.currency} {metrics.financials.expectedRent.toLocaleString()}</Text></View>

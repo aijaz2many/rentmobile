@@ -6,12 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Modal,
 } from 'react-native';
 import { apiRequest } from '../services/api';
 import { Apartment, GovernmentIdType } from '../types';
+import { formatDate } from '../lib/date';
 
 export interface TenantFormData {
   id?: string;
@@ -76,6 +76,7 @@ export default function TenantForm({ initialData = {}, apartments = [], onSucces
   const [idTypes, setIdTypes] = useState<GovernmentIdType[]>(DEFAULT_ID_TYPES);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [discardModalVisible, setDiscardModalVisible] = useState(false);
   const aptList = apartments.length > 0 ? apartments : loadedAptList;
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [calYear, setCalYear] = useState(() => {
@@ -166,19 +167,15 @@ export default function TenantForm({ initialData = {}, apartments = [], onSucces
 
   const handleCancel = () => {
     if (isDirty) {
-      if (typeof window !== 'undefined' && window.confirm) {
-        if (window.confirm('Discard unsaved changes?')) {
-          onCancel?.();
-        }
-      } else {
-        Alert.alert('Discard Changes?', 'You have unsaved edits. Are you sure you want to cancel?', [
-          { text: 'Keep Editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => onCancel?.() },
-        ]);
-      }
+      setDiscardModalVisible(true);
     } else {
       onCancel?.();
     }
+  };
+
+  const discardChanges = () => {
+    setDiscardModalVisible(false);
+    onCancel?.();
   };
 
   const submit = async () => {
@@ -388,7 +385,7 @@ export default function TenantForm({ initialData = {}, apartments = [], onSucces
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Text style={{ fontSize: 16 }}>📅</Text>
             <Text style={{ color: form.dateOfBirth ? '#f8fafc' : '#64748b', fontSize: 14 }}>
-              {form.dateOfBirth || 'Select Date of Birth'}
+              {form.dateOfBirth ? formatDate(form.dateOfBirth) : 'Select Date of Birth'}
             </Text>
           </View>
           {form.dateOfBirth ? (
@@ -732,6 +729,38 @@ export default function TenantForm({ initialData = {}, apartments = [], onSucces
                 onPress={() => setShowDatePicker(false)}
               >
                 <Text style={{ color: '#e2e8f0', fontSize: 12, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={discardModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDiscardModalVisible(false)}
+      >
+        <View style={styles.discardModalOverlay}>
+          <View style={styles.discardModalCard} accessibilityRole="alert">
+            <Text style={styles.discardModalTitle}>Discard unsaved changes?</Text>
+            <Text style={styles.discardModalMessage}>
+              Your tenant details have not been saved. Do you want to discard them and close this form?
+            </Text>
+            <View style={styles.discardModalActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.discardKeepButton}
+                onPress={() => setDiscardModalVisible(false)}
+              >
+                <Text style={styles.discardKeepText}>Keep editing</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.discardConfirmButton}
+                onPress={discardChanges}
+              >
+                <Text style={styles.discardConfirmText}>Discard changes</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1168,5 +1197,65 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  discardModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.76)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  discardModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#151f32',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 22,
+  },
+  discardModalTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  discardModalMessage: {
+    color: '#aab7ca',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  discardModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 22,
+  },
+  discardKeepButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#475569',
+    paddingHorizontal: 14,
+  },
+  discardKeepText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  discardConfirmButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#b91c1c',
+    paddingHorizontal: 14,
+  },
+  discardConfirmText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

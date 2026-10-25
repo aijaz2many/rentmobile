@@ -1,3 +1,4 @@
+﻿import type { ApiEnvelope } from '@rentmobile/shared';
 import { API_BASE_URL } from '../types';
 
 let authToken: string | null = null;
@@ -15,6 +16,15 @@ export function setToken(token: string | null) {
 
 export function getToken(): string | null {
   return authToken;
+}
+
+function normalizePayload<T>(payload: unknown): T {
+  if (payload && typeof payload === 'object' && 'data' in payload && 'success' in payload) {
+    const envelope = payload as ApiEnvelope<T>;
+    return envelope.data as T;
+  }
+
+  return payload as T;
 }
 
 export async function apiRequest<T = unknown>(
@@ -58,5 +68,7 @@ export async function apiRequest<T = unknown>(
     throw new ApiError(message, response.status);
   }
 
-  return data as T;
+  return normalizePayload<T>(data);
 }
+
+
