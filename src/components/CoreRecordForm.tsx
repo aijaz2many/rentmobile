@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { apiRequest } from '../services/api';
-import { formatDate, parseDateInput } from '../lib/date';
+import { formatDate, isDateField, parseDateInput } from '../lib/date';
 import { colors, ErrorMessage, Loading, styles } from './AppUi';
 
 type DataRecord = Record<string, unknown>;
@@ -13,6 +13,7 @@ type Field = {
   numeric?: boolean;
   emptyAsZero?: boolean;
   optionsEndpoint?: string;
+  options?: string[];
 };
 
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -50,6 +51,17 @@ const formDefinitions: Record<string, { fields: Field[] }> = {
       { key: 'securityDeposit', label: 'Security deposit', numeric: true },
       { key: 'rentDueDay', label: 'Rent due day', numeric: true },
       { key: 'lateFee', label: 'Late fee', numeric: true, emptyAsZero: true },
+      { key: 'status', label: 'Lease status', options: ['ACTIVE', 'EXPIRED', 'TERMINATED'] },
+    ],
+  },
+  expenses: {
+    fields: [
+      { key: 'categoryId', label: 'Category', optionsEndpoint: '/expenses/categories' },
+      { key: 'amount', label: 'Amount', required: true, numeric: true },
+      { key: 'expenseDate', label: 'Expense date (dd-MMM-YYYY)', required: true },
+      { key: 'vendorName', label: 'Vendor name' },
+      { key: 'invoiceNumber', label: 'Invoice number' },
+      { key: 'description', label: 'Description' },
     ],
   },
 };
@@ -85,7 +97,7 @@ function initialValues(kind: string, record: DataRecord | null): Record<string, 
     const text = value === null || value === undefined
       ? kind === 'properties' && key === 'country' ? 'India' : ''
       : String(value);
-    return [key, key === 'startDate' || key === 'endDate' ? formatDate(text) : text];
+    return [key, isDateField(key) ? formatDate(text) : text];
   }));
 }
 
@@ -108,8 +120,10 @@ export default function CoreRecordForm({
   const visibleFields = useMemo(
     () => record && kind === 'leases'
       ? fields.filter((field) => !['tenantId', 'apartmentId'].includes(field.key))
-      : record && kind === 'buildings'
-        ? fields.filter((field) => field.key !== 'propertyId')
+      : kind === 'leases'
+        ? fields.filter((field) => field.key !== 'status')
+        : record && kind === 'buildings'
+          ? fields.filter((field) => field.key !== 'propertyId')
         : fields,
     [fields, kind, record],
   );
@@ -174,9 +188,9 @@ export default function CoreRecordForm({
     const payload: DataRecord = {};
     for (const field of visibleFields) {
       const value = values[field.key]?.trim();
-      if (field.key === 'startDate' || field.key === 'endDate') {
+      if (isDateField(field.key)) {
         if (!value) {
-          if (record && field.key === 'endDate') payload[field.key] = null;
+          if (record && !field.required) payload[field.key] = null;
           continue;
         }
         const parsedDate = parseDateInput(value);
@@ -228,8 +242,42 @@ export default function CoreRecordForm({
       {visibleFields.map((field) => (
         <View key={field.key} style={{ gap: 6 }}>
           <Text style={styles.label}>{field.label}{field.required ? ' *' : ''}</Text>
-          {field.optionsEndpoint ? (
+          {field.options ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {field.options.map((option) => {
+                const selected = values[field.key] === option;
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => setValues((current) => ({ ...current, [field.key]: option }))}
+                    style={{
+                      backgroundColor: selected ? '#252e50' : colors.surface,
+                      borderColor: selected ? colors.accent : colors.border,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <Text style={{ color: colors.text }}>{option}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : field.optionsEndpoint ? (
             <View style={{ gap: 8 }}>
+              {!field.required ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: !values[field.key] }}
+                  onPress={() => setValues((current) => ({ ...current, [field.key]: '' }))}
+                  style={[styles.secondaryButton, { borderColor: !values[field.key] ? colors.accent : colors.border }]}
+                >
+                  <Text style={{ color: !values[field.key] ? colors.accent : colors.text }}>Not assigned</Text>
+                </Pressable>
+              ) : null}
               {(options[field.key] ?? []).map((option) => {
                 const selected = values[field.key] === String(option.id ?? '');
                 return (
@@ -249,7 +297,7 @@ export default function CoreRecordForm({
                 ? <Text style={styles.subtitle}>No choices available. Create the required record first.</Text>
                 : null}
             </View>
-          ) : field.key === 'startDate' || field.key === 'endDate' ? (
+          ) : isDateField(field.key) ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Select ${field.label}`}

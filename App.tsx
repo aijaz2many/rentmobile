@@ -25,7 +25,7 @@ type AppProps = {
 
 export default function App({ initialUser = null, onLogout, onBack }: AppProps = {}) {
   const [user, setUser] = useState<User | null>(initialUser);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'apartments' | 'tenants' | 'rent' | 'receipts'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'apartments' | 'tenants' | 'rent'>('dashboard');
 
   // Auth form states
   const [emailOrPhone, setEmailOrPhone] = useState('aijazmshaik@gmail.com');
@@ -467,7 +467,7 @@ export default function App({ initialUser = null, onLogout, onBack }: AppProps =
 
       {/* Top Nav Tabs */}
       <View style={styles.navBar}>
-        {(['dashboard', 'apartments', 'tenants', 'rent', 'receipts'] as const).map((tab) => (
+        {(['dashboard', 'apartments', 'tenants', 'rent'] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.navItem, activeTab === tab && styles.navItemActive]}

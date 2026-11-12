@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { apiRequest } from '../services/api';
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { apiRequest, invalidateApiCache } from '../services/api';
 import ApartmentForm from './ApartmentForm';
 import { ActionCard, Card, colors, ErrorMessage, Loading, Page, styles } from './AppUi';
 import CoreRecordForm, { supportsCoreRecordForm } from './CoreRecordForm';
 import TenantForm from './TenantForm';
-import { formatDate, hasNoEndDateOrEndsAfter, isDateField } from '../lib/date';
+import { formatDate, isDateField } from '../lib/date';
 import MaintenanceRequestForm from './MaintenanceRequestForm';
 import type { MaintenanceRequestInput } from '../modules/tenant';
 
@@ -53,13 +53,86 @@ function firstValue(record: DataRecord, keys: string[]): string | null {
   return null;
 }
 
+function getTenantApartmentNumber(record: DataRecord): string | null {
+  const apartment = [
+    record.currentApartment,
+    record.current_apartment,
+    record.apartment,
+    record.tsmib_apartments,
+  ].find(isRecord);
+  return firstValue(record, ['apartmentNumber', 'apartment_number']) ??
+    (apartment ? firstValue(apartment, ['apartmentNumber', 'apartment_number']) : null);
+}
+
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function paymentPeriodLabel(period: unknown): string {
+  if (typeof period !== 'string') return 'Unknown period';
+  const match = /^(\d{1,2})\/(\d{4})$/.exec(period);
+  if (!match) return period;
+  const month = Number(match[1]);
+  return month >= 1 && month <= 12 ? `${monthNames[month - 1]} ${match[2]}` : period;
+}
+
+function paymentSearchText(record: DataRecord): string {
+  const tenant = isRecord(record.tenant) ? record.tenant : {};
+  const apartment = isRecord(record.apartment) ? record.apartment : {};
+  const allocations = Array.isArray(record.allocations) ? record.allocations.filter(isRecord) : [];
+  return [
+    tenant.name,
+    apartment.apartmentNumber,
+    record.paymentReference,
+    record.transactionId,
+    record.receiptNumber,
+    record.amount,
+    record.methodName,
+    record.status,
+    ...allocations.flatMap((allocation) => [allocation.period, allocation.amount]),
+  ].filter((value) => value !== null && value !== undefined).join(' ').toLowerCase();
+}
+
 export function RecordCard({ record, kind }: { record: DataRecord; kind?: string }) {
   const apartment = isRecord(record.tsmib_apartments) ? record.tsmib_apartments : null;
   const apartmentNumber = firstValue(record, ['apartmentNumber']) ??
     (apartment ? firstValue(apartment, ['apartment_number', 'apartmentNumber']) : null);
+  const tenantApartmentNumber = getTenantApartmentNumber(record);
+  const tenantName = firstValue(record, ['fullName', 'full_name', 'name']) ??
+    [firstValue(record, ['firstName', 'first_name']), firstValue(record, ['lastName', 'last_name'])]
+      .filter((name): name is string => Boolean(name))
+      .join(' ');
+  const tenantDetails = [
+    { label: 'Phone Number', value: firstValue(record, ['phoneNumber', 'phone_number', 'phone']) },
+  ].filter((detail): detail is { label: string; value: string } => Boolean(detail.value));
+  const leaseTenants = Array.isArray(record.tsmib_lease_tenants)
+    ? record.tsmib_lease_tenants.filter(isRecord)
+    : [];
+  const leaseTenant = leaseTenants.find((item) => isRecord(item.tsmib_tenants))?.tsmib_tenants;
+  const leaseTenantName = isRecord(leaseTenant)
+    ? firstValue(leaseTenant, ['fullName']) ??
+      [leaseTenant.first_name ?? leaseTenant.firstName, leaseTenant.last_name ?? leaseTenant.lastName]
+        .filter((name): name is string => typeof name === 'string' && name.length > 0)
+        .join(' ')
+    : firstValue(record, ['tenantName', 'fullName']);
   const leaseStartDate = record.startDate ?? record.start_date;
+  const leaseEndDate = record.endDate ?? record.end_date;
   const leaseMonthlyRent = record.monthlyRent ?? record.monthly_rent;
+  const paymentTenant = isRecord(record.tenant) ? record.tenant : null;
+  const paymentApartment = isRecord(record.apartment) ? record.apartment : null;
+  const paymentAllocations = Array.isArray(record.allocations)
+    ? record.allocations.filter(isRecord)
+    : [];
   const title =
+    (kind === 'tenants'
+      ? [tenantApartmentNumber, tenantName].filter(Boolean).join(' : ') || 'Tenant'
+      : null) ??
+    (kind === 'payments' ? firstValue(paymentTenant ?? {}, ['name']) ?? 'Payment' : null) ??
+    (kind === 'expenses'
+      ? firstValue(record, ['vendor_name', 'vendorName', 'expense_number', 'expenseNumber']) ??
+        (isRecord(record.tsmib_expense_categories) ? firstValue(record.tsmib_expense_categories, ['name']) : null)
+      : null) ??
     (kind === 'leases' ? apartmentNumber ?? 'Apartment' : null) ??
     firstValue(record, ['title', 'name', 'fullName', 'apartmentNumber', 'lease_number', 'leaseNumber', 'requestNumber', 'receiptNumber', 'reference', 'id']) ??
     'Record';
@@ -83,8 +156,12 @@ export function RecordCard({ record, kind }: { record: DataRecord; kind?: string
   return (
     <Card>
       <Text style={styles.actionTitle}>{title}</Text>
-      {status && kind !== 'apartments' && kind !== 'leases' ? <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>{status}</Text> : null}
-      {kind === 'apartments' ? (
+      {status && kind !== 'apartments' && kind !== 'leases' ? <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>{kind === 'tenants' ? status.toUpperCase() : status}</Text> : null}
+      {kind === 'tenants' ? (
+        tenantDetails.map(({ label, value }) => (
+          <Text key={label} style={styles.subtitle}>{`${label}: ${value}`}</Text>
+        ))
+      ) : kind === 'apartments' ? (
         <>
           {typeof record.buildingName === 'string' && record.buildingName
             ? <Text style={styles.subtitle}>Building: {record.buildingName}</Text>
@@ -95,11 +172,51 @@ export function RecordCard({ record, kind }: { record: DataRecord; kind?: string
         </>
       ) : kind === 'leases' ? (
         <>
+          {leaseTenantName ? <Text style={styles.subtitle}>Tenant: {leaseTenantName}</Text> : null}
           {leaseStartDate !== undefined && leaseStartDate !== null
             ? <Text style={styles.subtitle}>Start date: {formatDate(leaseStartDate)}</Text>
             : null}
+          {leaseEndDate !== undefined && leaseEndDate !== null
+            ? <Text style={styles.subtitle}>End date: {formatDate(leaseEndDate)}</Text>
+            : <Text style={styles.subtitle}>End date: No end date</Text>}
           {leaseMonthlyRent !== undefined && leaseMonthlyRent !== null
             ? <Text style={styles.subtitle}>Monthly rent: {String(leaseMonthlyRent)}</Text>
+            : null}
+        </>
+      ) : kind === 'payments' ? (
+        <>
+          {paymentApartment ? (
+            <Text style={styles.subtitle}>Apartment: {firstValue(paymentApartment, ['apartmentNumber']) ?? '—'}</Text>
+          ) : null}
+          <Text style={styles.subtitle}>Payment: {firstValue(record, ['amount']) ?? '0'}</Text>
+          <Text style={styles.subtitle}>Date: {record.paymentDate ? formatDate(record.paymentDate) : '—'}</Text>
+          {paymentAllocations.length > 0
+            ? paymentAllocations.map((allocation, index) => (
+                <Text key={String(allocation.id ?? index)} style={styles.subtitle}>
+                  Paid for: {paymentPeriodLabel(allocation.period)} · {firstValue(allocation, ['amount']) ?? '0'} allocated
+                </Text>
+              ))
+            : <Text style={styles.subtitle}>Paid for: No rent charge allocation</Text>}
+        </>
+      ) : kind === 'expenses' ? (
+        <>
+          <Text style={styles.subtitle}>
+            Category: {isRecord(record.tsmib_expense_categories)
+              ? firstValue(record.tsmib_expense_categories, ['name']) ?? 'Uncategorized'
+              : 'Uncategorized'}
+          </Text>
+          <Text style={styles.subtitle}>Amount: {firstValue(record, ['amount']) ?? '—'}</Text>
+          {(record.expense_date ?? record.expenseDate) !== undefined
+            ? <Text style={styles.subtitle}>Date: {formatDate(record.expense_date ?? record.expenseDate)}</Text>
+            : null}
+          {firstValue(record, ['vendor_name', 'vendorName'])
+            ? <Text style={styles.subtitle}>Vendor: {firstValue(record, ['vendor_name', 'vendorName'])}</Text>
+            : null}
+          {firstValue(record, ['invoice_number', 'invoiceNumber'])
+            ? <Text style={styles.subtitle}>Invoice: {firstValue(record, ['invoice_number', 'invoiceNumber'])}</Text>
+            : null}
+          {firstValue(record, ['description'])
+            ? <Text style={styles.subtitle}>{firstValue(record, ['description'])}</Text>
             : null}
         </>
       ) : kind === 'maintenance' ? (
@@ -134,11 +251,19 @@ function propertyBuildings(payload: unknown): DataRecord[] {
 
 function rowsFor(kind: string, definition: { endpoint: string; key?: string }, payload: unknown): DataRecord[] {
   const rows = kind === 'buildings' ? propertyBuildings(payload) : extractRows(payload, definition.key);
+  if (kind === 'tenants') {
+    return rows.sort((left, right) => {
+      const leftNumber = getTenantApartmentNumber(left);
+      const rightNumber = getTenantApartmentNumber(right);
+      if (!leftNumber) return rightNumber ? 1 : 0;
+      if (!rightNumber) return -1;
+      return leftNumber.localeCompare(rightNumber, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
   if (kind !== 'leases') return rows;
 
-  const today = new Date().toISOString().slice(0, 10);
   return rows
-    .filter((lease) => hasNoEndDateOrEndsAfter(lease.endDate ?? lease.end_date, today))
+    .filter((lease) => ['ACTIVE', 'EXPIRED'].includes(String(lease.status ?? '').toUpperCase()))
     .sort((left, right) => {
     const leftApartment = isRecord(left.tsmib_apartments) ? left.tsmib_apartments : null;
     const rightApartment = isRecord(right.tsmib_apartments) ? right.tsmib_apartments : null;
@@ -166,9 +291,13 @@ export function ModuleScreen({ kind }: { kind: string }) {
   const [formRecord, setFormRecord] = useState<DataRecord | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [formVersion, setFormVersion] = useState(0);
+  const [paymentSearch, setPaymentSearch] = useState('');
 
-  const canManage = ['properties', 'buildings', 'apartments', 'tenants', 'leases'].includes(kind);
+  const canManage = ['properties', 'buildings', 'apartments', 'tenants', 'leases', 'expenses'].includes(kind);
   const canCreateMaintenance = kind === 'maintenance';
+  const visibleRows = kind === 'payments' && paymentSearch.trim()
+    ? rows.filter((record) => paymentSearchText(record).includes(paymentSearch.trim().toLowerCase()))
+    : rows;
 
   const loadRows = useCallback(async () => {
     if (!definition) return;
@@ -197,6 +326,7 @@ export function ModuleScreen({ kind }: { kind: string }) {
 
   const refresh = async () => {
     if (!definition) return;
+    invalidateApiCache();
     setLoading(true);
     setError(null);
     try {
@@ -305,6 +435,8 @@ export function ModuleScreen({ kind }: { kind: string }) {
     if (typeof id !== 'string' || !definition) return;
     const title = kind === 'leases'
       ? 'this lease'
+      : kind === 'expenses'
+        ? firstValue(record, ['vendor_name', 'vendorName', 'expense_number', 'expenseNumber']) ?? 'this expense'
       : firstValue(record, ['name', 'fullName', 'apartmentNumber', 'leaseNumber', 'lease_number']) ?? 'this record';
     const actionTitle = kind === 'leases' ? 'Terminate lease?' : `Delete ${title}?`;
     const actionDescription = kind === 'leases'
@@ -389,14 +521,26 @@ export function ModuleScreen({ kind }: { kind: string }) {
       {canManage || canCreateMaintenance ? (
         <Pressable accessibilityRole="button" onPress={() => openForm()} style={styles.button}>
           <Text style={styles.buttonLabel}>
-            {canCreateMaintenance ? 'Add request for tenant' : `Add ${{ properties: 'Property', buildings: 'Building', apartments: 'Apartment', tenants: 'Tenant', leases: 'Lease' }[kind]}`}
+            {canCreateMaintenance
+              ? 'Add request for tenant'
+              : `Add ${{ properties: 'Property', buildings: 'Building', apartments: 'Apartment', tenants: 'Tenant', leases: 'Lease', expenses: 'Expense' }[kind]}`}
           </Text>
         </Pressable>
       ) : null}
-      {!loading && !error && rows.length === 0 ? (
-        <Card><Text style={styles.subtitle}>No records found.</Text></Card>
+      {kind === 'payments' && !loading && !error ? (
+        <TextInput
+          accessibilityLabel="Search payments"
+          onChangeText={setPaymentSearch}
+          placeholder="Search tenant, apartment, month, year..."
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          value={paymentSearch}
+        />
       ) : null}
-      {rows.map((record, index) => (
+      {!loading && !error && visibleRows.length === 0 ? (
+        <Card><Text style={styles.subtitle}>{kind === 'payments' && paymentSearch.trim() ? 'No payments match your search.' : 'No records found.'}</Text></Card>
+      ) : null}
+      {visibleRows.map((record, index) => (
         <View key={typeof record.id === 'string' ? record.id : `${kind}-${index}`} style={{ gap: 8 }}>
           <RecordCard record={record} kind={kind} />
           {canManage ? (
@@ -436,7 +580,7 @@ export function ModuleScreen({ kind }: { kind: string }) {
               <Text style={styles.pageTitle}>
                 {kind === 'maintenance'
                   ? `${formRecord ? 'Edit' : 'Add'} maintenance request`
-                  : `${formRecord ? 'Edit' : 'Create'} ${{ properties: 'Property', buildings: 'Building', apartments: 'Apartment', tenants: 'Tenant', leases: 'Lease' }[kind]}`}
+                  : `${formRecord ? 'Edit' : 'Create'} ${{ properties: 'Property', buildings: 'Building', apartments: 'Apartment', tenants: 'Tenant', leases: 'Lease', expenses: 'Expense' }[kind]}`}
               </Text>
               <Pressable accessibilityRole="button" onPress={() => setFormVisible(false)}><Text style={{ color: colors.accent }}>Close</Text></Pressable>
             </View>

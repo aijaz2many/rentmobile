@@ -5,7 +5,6 @@ import { ActionCard, Page } from '../../components/AppUi';
 const sections = [
   ['rent', 'Rent', 'Monthly charges and collection status.'],
   ['payments', 'Payments', 'Payment history and allocations.'],
-  ['receipts', 'Receipts', 'Generated payment receipts.'],
   ['expenses', 'Expenses', 'Operating expenses and categories.'],
   ['reports', 'Reports', 'Rent collection report for the current period.'],
 ];

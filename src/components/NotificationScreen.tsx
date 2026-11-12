@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, Text } from 'react-native';
-import { apiRequest } from '../services/api';
+import { apiRequest, invalidateApiCache } from '../services/api';
 import { Card, colors, ErrorMessage, Loading, Page, styles } from './AppUi';
 import { formatDate } from '../lib/date';
 
@@ -37,6 +37,7 @@ export default function NotificationScreen() {
   }, []);
 
   const refresh = async () => {
+    invalidateApiCache();
     setLoading(true);
     setError(null);
     try {

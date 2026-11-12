@@ -15,7 +15,7 @@ import {
   type MaintenanceCategory,
   type TenantProfile,
 } from '../modules/tenant';
-import { apiRequest } from '../services/api';
+import { apiRequest, invalidateApiCache } from '../services/api';
 import { formatDate, isDateField } from '../lib/date';
 import { ActionCard, Card, colors, ErrorMessage, Loading, Page, styles } from './AppUi';
 import { RecordCard } from './ModuleScreen';
@@ -119,6 +119,7 @@ export default function TenantScreen({ kind }: { kind: ScreenKind }) {
 
   const refresh = async () => {
     if (!tenantId) return;
+    invalidateApiCache();
     setLoading(true);
     setError(null);
     try {
