@@ -1,0 +1,76 @@
+{
+  "planHash": "e594557c99bac58e04925c8dbc42e461aedab9894a3c51a345894fca22561700",
+  "phase": "postupgrade",
+  "recordedAtUtc": "2026-11-12T16:22:23.0616854Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 0,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E mobile@1.0.0 test\r\n\u003E vitest run\r\n\r\n\r\n\u001B[1m\u001B[46m RUN \u001B[49m\u001B[22m \u001B[36mv3.2.7 \u001B[39m\u001B[90mD:/workspace/rentmobile/rentmobile\u001B[39m\r\n\r\n \u001B[32m\u2713\u001B[39m src/__tests__/date.test.ts \u001B[2m(\u001B[22m\u001B[2m4 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 10\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/__tests__/rentCharges.test.ts \u001B[2m(\u001B[22m\u001B[2m3 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 36\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/__tests__/apiCache.test.ts \u001B[2m(\u001B[22m\u001B[2m4 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 88\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/__tests__/phase19-21.test.ts \u001B[2m(\u001B[22m\u001B[2m5 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 13\u001B[2mms\u001B[22m\u001B[39m\r\n\r\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m4 passed\u001B[39m\u001B[22m\u001B[90m (4)\u001B[39m\r\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m16 passed\u001B[39m\u001B[22m\u001B[90m (16)\u001B[39m\r\n\u001B[2m   Start at \u001B[22m 21:52:16\r\n\u001B[2m   Duration \u001B[22m 1.33s\u001B[2m (transform 349ms, setup 0ms, collect 924ms, tests 147ms, environment 2ms, prepare 1.45s)\u001B[22m\r\n\r\n",
+        "durationMs": 4082,
+        "testResults": {
+          "testFramework": "vitest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 16,
+          "testsPassed": 16,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "web-home-200",
+        "kind": "http-probe",
+        "verificationMethod": "http-status",
+        "passed": false,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 1,
+        "outputSample": "server exited before responding (exit=1)\n--- server output ---\n\r\n\u003E mobile@1.0.0 web\r\n\u003E expo start --web --port 8081\r\n\r\nStarting project at D:\\workspace\\rentmobile\\rentmobile\r\n\u203A Port 8081 is being used by another process\r\nCommandError: Port 8081 is unavailable and \u0027npx expo\u0027 is running in non-interactive mode, so it can\u0027t prompt to use another port. Free port 8081 by stopping the process using it, or re-run with an available \u0027--port\u0027.\r\n",
+        "durationMs": 5298
+      }
+    ],
+    "executions": [
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "test"
+        ],
+        "cwd": "D:\\workspace\\rentmobile\\rentmobile",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "web-home-200",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "web",
+          "--",
+          "--port",
+          "8081"
+        ],
+        "cwd": "D:\\workspace\\rentmobile\\rentmobile",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}

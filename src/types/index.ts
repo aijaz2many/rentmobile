@@ -1,8 +1,10 @@
 import { Platform } from 'react-native';
 import type { SharedUser, UserRole } from '@rentmobile/shared';
 
-//const defaultApiUrl = Platform.OS === 'android'  ? 'http://10.0.2.2:5000/api'  : 'http://localhost:5000/api';
-const defaultApiUrl = 'https://rentbackend-fyq3.onrender.com/api';
+const defaultApiUrl = Platform.OS === 'android'  ? 'http://10.0.2.2:5000/api'  : 'http://localhost:5000/api';
+//const defaultApiUrl = 'https://rentbackend-fyq3.onrender.com/api';
+//const defaultApiUrl = 'https://renterapp.cloud.run/api';
+
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
 
 export type { UserRole };

@@ -92,7 +92,15 @@ export default function App({ initialUser = null, onLogout, onBack }: AppProps =
         setApartments(data);
       } else if (tab === 'tenants') {
         const data = await apiRequest<Tenant[]>('/tenants');
-        setTenants(data);
+        setTenants(
+          [...data].sort((left, right) => {
+            const leftNumber = left.currentApartment?.apartmentNumber;
+            const rightNumber = right.currentApartment?.apartmentNumber;
+            if (!leftNumber) return rightNumber ? 1 : 0;
+            if (!rightNumber) return -1;
+            return leftNumber.localeCompare(rightNumber, undefined, { numeric: true, sensitivity: 'base' });
+          }),
+        );
       } else if (tab === 'rent') {
         const [charges, paymentRes, apts] = await Promise.all([
           apiRequest<RentCharge[]>('/rent/charges'),

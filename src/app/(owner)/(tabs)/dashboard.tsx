@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { DashboardMetrics } from '../../types';
-import { getDashboardMetrics } from '../../modules/dashboard';
-import { invalidateApiCache } from '../../services/api';
-import { Card, ErrorMessage, Loading, Page, styles } from '../../components/AppUi';
+import { DashboardMetrics } from '../../../types';
+import { getDashboardMetrics } from '../../../modules/dashboard';
+import { invalidateApiCache } from '../../../services/api';
+import { Card, ErrorMessage, Loading, Page, styles } from '../../../components/AppUi';
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (

@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-11-12T21:34:20+05:30",
+  "generatedOnPlatform": "win32",
+  "projectType": "webapp",
+  "setup": [],
+  "assertions": [
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["test"],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "web-home-200",
+      "kind": "http-probe",
+      "startCommand": "npm",
+      "startArgs": ["run", "web", "--", "--port", "8081"],
+      "url": "http://localhost:8081/",
+      "verificationMethod": "http-status",
+      "expected": "200",
+      "timeoutSeconds": 240
+    }
+  ]
+}

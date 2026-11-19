@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { ActionCard, Page } from '../../components/AppUi';
+import { ActionCard, Page } from '../../../components/AppUi';
 
 export default function MoreScreen() {
   return (
